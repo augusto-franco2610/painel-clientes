@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function myEmail() { return request.auth.token.email.lower(); }
+    function profilePath() { return /databases/$(db)/documents/users/$(myEmail()); }
+    function isOwner() { return signedIn() && myEmail() == '1imovjund@gmail.com'; }
+    function isMember() {
+      return signedIn() && exists(profilePath()) && get(profilePath()).data.ativo == true;
+    }
+    function isAdmin() {
+      return isOwner() || (isMember() && get(profilePath()).data.papel == 'admin');
+    }
+    function leadOf(id) { return get(/databases/$(db)/documents/leads/$(id)).data; }
+
+    // Pessoas com acesso
+    match /users/{uid} {
+      allow read: if isAdmin() || (signedIn() && uid == myEmail());
+      allow write: if isAdmin();
+    }
+
+    // Listas configuráveis (produtos etc.)
+    match /config/{doc} {
+      allow read: if isAdmin() || isMember();
+      allow write: if isAdmin();
+    }
+
+    // Clientes
+    match /leads/{id} {
+      allow read: if isAdmin()
+        || (isMember() && resource.data.responsavel == myEmail());
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (isMember()
+            && resource.data.responsavel == myEmail()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+                 ['produto', 'etapa', 'motivoDescarte', 'atualizadoEm', 'atualizadoPor',
+                  'ultimoFeedback', 'ultimoFeedbackEm']));
+
+      match /feedbacks/{fid} {
+        allow read: if isAdmin()
+          || (isMember() && leadOf(id).responsavel == myEmail());
+        allow create: if request.resource.data.autor == myEmail()
+          && (isAdmin() || (isMember() && leadOf(id).responsavel == myEmail()));
+        allow update, delete: if isAdmin();
+      }
+    }
+  }
+}
