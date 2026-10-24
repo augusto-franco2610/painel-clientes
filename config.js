@@ -4,12 +4,12 @@
 // Estes valores não são senha: quem protege os dados são as regras do Firestore.
 
 const firebaseConfig = {
-  apiKey: "COLE_AQUI",
+  apiKey: "AIzaSyBvpt12SiwXXdUbcIu3G0O1d6v0hZZrzpk",
   authDomain: "painel-clientes-9e7c1.firebaseapp.com",
   projectId: "painel-clientes-9e7c1",
   storageBucket: "painel-clientes-9e7c1.firebasestorage.app",
-  messagingSenderId: "COLE_AQUI",
-  appId: "COLE_AQUI"
+  messagingSenderId: "195889851776",
+  appId: "1:195889851776:web:fbaac0a6fd16ca9a95e565"
 };
 
 export { firebaseConfig };
