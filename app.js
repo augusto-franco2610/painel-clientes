@@ -177,6 +177,7 @@ function refreshAll() {
   fillSelect($("fProduto"), "Todos os produtos", allProdutos());
   fillSelect($("fEtapa"), "Todas as etapas", ETAPAS);
   fillSelect($("fCorretor"), "Todos os corretores", allCorretores());
+  fillSelect($("fOrigem"), "Todas as origens", uniq("origem"));
   const ativos = S.users.filter((u) => u.ativo);
   fillSelect($("fDesignado"), "Designação: todas", [{ v: "__none", t: "Sem designação" }, ...ativos.map((u) => ({ v: u.id, t: u.nome || u.id }))]);
   fillSelect($("bulkUser"), "Designar para…", [{ v: "__none", t: "— Remover designação —" }, ...ativos.map((u) => ({ v: u.id, t: u.nome || u.id }))]);
@@ -376,18 +377,19 @@ function renderDash() {
 }
 
 /* ---------------- CLIENTES ---------------- */
-["q", "fProduto", "fEtapa", "fCorretor", "fDesignado", "fOrdem"].forEach((id) => {
+["q", "fProduto", "fEtapa", "fCorretor", "fOrigem", "fDesignado", "fOrdem"].forEach((id) => {
   $(id).addEventListener(id === "q" ? "input" : "change", () => { S.shown = 60; renderClientes(); });
 });
 $("btnMore").onclick = () => { S.shown += 60; renderClientes(); };
 
 function filteredLeads() {
   const q = norm($("q").value), qd = $("q").value.replace(/\D/g, "");
-  const p = $("fProduto").value, e = $("fEtapa").value, c = $("fCorretor").value, d = $("fDesignado").value;
+  const p = $("fProduto").value, e = $("fEtapa").value, c = $("fCorretor").value, d = $("fDesignado").value, ori = $("fOrigem").value;
   let L = S.leads.filter((l) => {
     if (p && l.produto !== p) return false;
     if (e && l.etapa !== e) return false;
     if (c && l.corretor !== c) return false;
+    if (ori && l.origem !== ori) return false;
     if (d === "__none" && l.responsavel) return false;
     if (d && d !== "__none" && l.responsavel !== d) return false;
     if (q) {
