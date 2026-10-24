@@ -113,13 +113,24 @@ onAuthStateChanged(auth, async (user) => {
 
 function startListeners() {
   $("loadingBar").classList.remove("hidden");
-  const leadsQ = S.admin ? collection(db, "leads")
-    : query(collection(db, "leads"), where("responsavel", "==", S.me.email));
-  S.unsub.push(onSnapshot(leadsQ, (snap) => {
-    S.leads = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    $("loadingBar").classList.add("hidden");
-    refreshAll();
-  }, (e) => { $("loadingBar").classList.add("hidden"); toast("Erro ao carregar clientes: " + e.code); }));
+  const col = collection(db, "leads");
+  const queries = S.admin ? [["todos", col]] : [["meus", query(col, where("responsavel", "==", S.me.email))]];
+  if (!S.admin && S.profile?.papel === "gestor") {
+    (S.profile.corretores || []).forEach((c) => queries.push(["c:" + c, query(col, where("corretor", "==", c))]));
+  }
+  const parts = new Map();
+  let pendentes = queries.length;
+  queries.forEach(([key, q]) => {
+    let first = true;
+    S.unsub.push(onSnapshot(q, (snap) => {
+      parts.set(key, snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      const all = new Map();
+      parts.forEach((arr) => arr.forEach((l) => all.set(l.id, l)));
+      S.leads = [...all.values()];
+      if (first) { first = false; if (--pendentes <= 0) $("loadingBar").classList.add("hidden"); }
+      refreshAll();
+    }, (e) => { $("loadingBar").classList.add("hidden"); toast("Erro ao carregar clientes: " + e.code); }));
+  });
 
   S.unsub.push(onSnapshot(doc(db, "config", "listas"), (snap) => {
     const p = snap.exists() ? snap.data().produtos || [] : [];
@@ -397,7 +408,7 @@ function filteredLeads() {
 const CHECK = `<span class="check"><svg viewBox="0 0 12 12"><path d="M2.5 6.2 5 8.6 9.5 3.6"/></svg></span>`;
 function renderClientes() {
   const L = filteredLeads();
-  $("count").textContent = `${L.length.toLocaleString("pt-BR")} ${L.length === 1 ? "cliente" : "clientes"}` + (S.admin ? "" : " designados a você");
+  $("count").textContent = `${L.length.toLocaleString("pt-BR")} ${L.length === 1 ? "cliente" : "clientes"}` + (S.admin ? "" : S.profile?.papel === "gestor" ? " da sua equipe" : " designados a você");
   if (!L.length) { $("grid").innerHTML = `<div class="empty">${icon("inbox")}<div>Nenhum cliente encontrado</div></div>`; $("btnMore").classList.add("hidden"); return; }
   $("grid").innerHTML = L.slice(0, S.shown).map((l) => `
     <div class="ccard ${S.sel.has(l.id) ? "sel" : ""}" data-id="${esc(l.id)}" tabindex="0">
@@ -566,12 +577,51 @@ function openLead(id) {
 }
 
 /* ---------------- ACESSOS ---------------- */
+function corretoresChecks(sel = []) {
+  const lista = [...new Set([...uniq("corretor"), ...sel])].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  return lista.map((c) => `<label class="ck"><input type="checkbox" value="${esc(c)}" ${sel.includes(c) ? "checked" : ""}><span>${esc(c)}</span></label>`).join("");
+}
+function toggleGestorBox() {
+  const g = $("uPapel").value === "gestor";
+  $("uGestor").classList.toggle("hidden", !g);
+  if (g && !$("uCorretores").children.length) $("uCorretores").innerHTML = corretoresChecks();
+}
+$("uPapel").onchange = toggleGestorBox;
+
+function openEquipe(u) {
+  $("sheet").innerHTML = `
+    <div class="hd">
+      <div class="avatar">${esc(initials(u.nome || u.id))}</div>
+      <div style="min-width:0"><h3>Equipe de ${esc(u.nome || u.id)}</h3><p class="note" style="margin:4px 0 0">Marque os corretores cujos clientes este gestor pode ver.</p></div>
+      <button class="x" id="mClose" aria-label="Fechar"><svg viewBox="0 0 14 14"><path d="M3 3l8 8M11 3l-8 8"/></svg></button>
+    </div>
+    <div class="bd">
+      <div class="cklist" id="eqList">${corretoresChecks(u.corretores || [])}</div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+        <button class="btn plain" id="eqCancel">Cancelar</button><button class="btn primary" id="eqSave">Salvar equipe</button>
+      </div>
+    </div>`;
+  $("modal").classList.remove("hidden");
+  $("mClose").onclick = $("eqCancel").onclick = closeModal;
+  $("eqSave").onclick = async () => {
+    const corretores = [...document.querySelectorAll("#eqList input:checked")].map((i) => i.value);
+    $("eqSave").classList.add("loading");
+    try { await updateDoc(doc(db, "users", u.id), { corretores }); toast("Equipe atualizada"); closeModal(); }
+    catch (e) { $("eqSave").classList.remove("loading"); toast("Erro ao salvar: " + e.code); }
+  };
+}
+
 $("btnAddUser").onclick = async () => {
   const email = $("uEmail").value.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast("Informe um e-mail válido.");
-  const data = { nome: $("uNome").value.trim() || email, papel: $("uPapel").value, apelido: $("uApelido").value || "", ativo: true, criadoEm: serverTimestamp(), criadoPor: S.me.email };
+  const papel = $("uPapel").value;
+  const data = { nome: $("uNome").value.trim() || email, papel, apelido: $("uApelido").value || "", ativo: true, criadoEm: serverTimestamp(), criadoPor: S.me.email };
+  if (papel === "gestor") {
+    data.corretores = [...document.querySelectorAll("#uCorretores input:checked")].map((i) => i.value);
+    if (!data.corretores.length) return toast("Marque ao menos um corretor para o gestor.");
+  }
   await setDoc(doc(db, "users", email), data, { merge: true });
-  ["uEmail", "uNome"].forEach((i) => $(i).value = ""); $("uApelido").value = "";
+  ["uEmail", "uNome"].forEach((i) => $(i).value = ""); $("uApelido").value = ""; $("uPapel").value = "corretor"; toggleGestorBox();
   toast(`Acesso liberado para ${email}.`);
 };
 
@@ -581,11 +631,13 @@ function renderEquipe() {
   $("usersBody").innerHTML = rows.map((u) => {
     const n = S.leads.filter((l) => l.responsavel === u.id).length;
     const pend = u.apelido ? S.leads.filter((l) => l.corretor === u.apelido && l.responsavel !== u.id).length : 0;
-    const papel = u.dono ? "Dono" : u.papel === "admin" ? "Administrador" : "Corretor";
+    const papel = u.dono || u.papel === "admin" ? "Administrador" : u.papel === "gestor" ? "Gestor" : "Corretor";
+    const cls = u.dono || u.papel === "admin" ? "s-Iniciados" : u.papel === "gestor" ? "s-Vendido" : "s-Conversando";
+    const equipe = u.papel === "gestor" ? (u.corretores || []) : null;
     return `<tr data-u="${esc(u.id)}">
       <td><div class="person"><div class="avatar">${esc(initials(u.nome || u.id))}</div><div><b>${esc(u.nome || u.id)}</b><small>${esc(u.id)}</small></div></div></td>
-      <td>${u.ativo ? `<span class="status ${u.papel === "admin" ? "s-Iniciados" : "s-Conversando"}">${papel}</span>` : `<span class="status s-Descartados">Bloqueado</span>`}</td>
-      <td>${esc(u.apelido || "—")}</td>
+      <td>${u.ativo ? `<span class="status ${cls}">${papel}</span>` : `<span class="status s-Descartados">Bloqueado</span>`}</td>
+      <td>${equipe ? `<div style="max-width:260px"><small class="note" style="margin:0">Vê os clientes de:</small><br>${equipe.length ? esc(equipe.join(", ")) : "nenhum corretor"} <button class="btn plain sm" data-a="equipe">Editar</button></div>` : esc(u.apelido || "—")}</td>
       <td class="n">${n.toLocaleString("pt-BR")}</td>
       <td><div class="rowact">${pend ? `<button class="btn tinted sm" data-a="sync">Designar +${pend}</button>` : ""}${u.dono ? "" : `
         <button class="btn plain sm" data-a="toggle">${u.ativo ? "Bloquear" : "Reativar"}</button>
@@ -596,6 +648,7 @@ function renderEquipe() {
 $("usersBody").onclick = async (e) => {
   const b = e.target.closest("button"); if (!b) return;
   const id = b.closest("tr").dataset.u; const u = S.users.find((x) => x.id === id);
+  if (b.dataset.a === "equipe") return openEquipe(u);
   if (b.dataset.a === "toggle") { await updateDoc(doc(db, "users", id), { ativo: !u.ativo }); toast(u.ativo ? "Acesso bloqueado." : "Acesso reativado."); }
   if (b.dataset.a === "del") {
     if (!confirm(`Remover o acesso de ${u.nome || id}? Os clientes dele ficarão sem designação.`)) return;

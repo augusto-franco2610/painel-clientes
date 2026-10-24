@@ -15,6 +15,14 @@ service cloud.firestore {
       return isOwner() || (isMember() && get(profilePath()).data.papel == 'admin');
     }
     function leadOf(id) { return get(/databases/$(db)/documents/leads/$(id)).data; }
+    // Pode trabalhar no cliente: designado a ele, ou gestor do corretor do cliente
+    function canWork(lead) {
+      return isMember() && (
+        lead.responsavel == myEmail()
+        || (get(profilePath()).data.papel == 'gestor'
+            && lead.corretor in get(profilePath()).data.get('corretores', []))
+      );
+    }
 
     // Pessoas com acesso
     match /users/{uid} {
@@ -30,21 +38,18 @@ service cloud.firestore {
 
     // Clientes
     match /leads/{id} {
-      allow read: if isAdmin()
-        || (isMember() && resource.data.responsavel == myEmail());
+      allow read: if isAdmin() || canWork(resource.data);
       allow create, delete: if isAdmin();
       allow update: if isAdmin()
-        || (isMember()
-            && resource.data.responsavel == myEmail()
+        || (canWork(resource.data)
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
                  ['produto', 'etapa', 'motivoDescarte', 'atualizadoEm', 'atualizadoPor',
                   'ultimoFeedback', 'ultimoFeedbackEm']));
 
       match /feedbacks/{fid} {
-        allow read: if isAdmin()
-          || (isMember() && leadOf(id).responsavel == myEmail());
+        allow read: if isAdmin() || canWork(leadOf(id));
         allow create: if request.resource.data.autor == myEmail()
-          && (isAdmin() || (isMember() && leadOf(id).responsavel == myEmail()));
+          && (isAdmin() || canWork(leadOf(id)));
         allow update, delete: if isAdmin();
       }
     }

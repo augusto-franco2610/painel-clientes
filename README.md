@@ -10,7 +10,8 @@ Painel web para acompanhar leads: visão geral com indicadores e gráficos, fich
 
 | Papel | Vê | Pode alterar |
 |---|---|---|
-| Dono / Administrador | Todos os clientes | Tudo: produto, etapa, corretor, designação, acessos, importação |
+| Administrador | Todos os clientes | Tudo: produto, etapa, corretor, designação, acessos, importação |
+| Gestor | Clientes dos corretores escolhidos pelo administrador e os designados a ele | Produto, etapa, motivo do descarte e feedbacks |
 | Corretor | Só os clientes designados a ele | Produto, etapa, motivo do descarte e feedbacks |
 
 As permissões são garantidas no servidor pelas regras em `firestore.rules`, não só pela interface.

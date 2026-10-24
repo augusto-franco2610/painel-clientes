@@ -240,6 +240,12 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .inline{display:flex;gap:var(--s-2);margin-bottom:var(--s-4)}
 .inline .field{flex:1}
 
+.cklist{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.ck{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--c-line-soft);border-radius:var(--r-sm);cursor:pointer;font-size:var(--fs-callout);transition:background .12s,border-color .12s}
+.ck:hover{background:var(--c-fill)}
+.ck input{accent-color:var(--c-blue);width:16px;height:16px;margin:0}
+.ck:has(input:checked){border-color:var(--c-blue);background:var(--c-blue-soft)}
+
 /* ---------- Importar ---------- */
 .drop{display:flex;flex-direction:column;align-items:center;gap:var(--s-2);border:1.5px dashed var(--c-line);border-radius:var(--r-lg);padding:var(--s-10) var(--s-4);text-align:center;cursor:pointer;transition:border-color .15s,background .15s;color:var(--c-text-2)}
 .drop:hover,.drop.over{border-color:var(--c-blue);background:var(--c-blue-soft)}
@@ -443,17 +449,22 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
           <label>Corretor no CRM<select class="select" id="uApelido"></select></label>
           <label>Papel<select class="select" id="uPapel">
             <option value="corretor">Corretor — vê os clientes designados</option>
+            <option value="gestor">Gestor — vê os clientes dos corretores que você escolher</option>
             <option value="admin">Administrador — vê tudo</option>
           </select></label>
           <button class="btn primary" id="btnAddUser">Dar acesso</button>
         </div>
-        <p class="note">"Corretor no CRM" liga a pessoa ao nome do relatório, para designar todos os clientes dela de uma vez.</p>
+        <div id="uGestor" class="hidden" style="margin-top:var(--s-4)">
+          <div class="note" style="margin:0 0 var(--s-2)">Corretores que este gestor acompanha:</div>
+          <div class="cklist" id="uCorretores"></div>
+        </div>
+        <p class="note">"Corretor no CRM" liga a pessoa ao nome do relatório, para designar todos os clientes dela de uma vez. O gestor vê os clientes dos corretores marcados e os que forem designados a ele.</p>
       </div>
 
       <div class="section-title">Pessoas</div>
       <div class="card tablewrap">
         <table>
-          <thead><tr><th>Pessoa</th><th>Papel</th><th>Corretor no CRM</th><th class="n">Clientes</th><th></th></tr></thead>
+          <thead><tr><th>Pessoa</th><th>Papel</th><th>Corretor no CRM / equipe</th><th class="n">Clientes</th><th></th></tr></thead>
           <tbody id="usersBody"></tbody>
         </table>
       </div>
