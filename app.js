@@ -191,13 +191,48 @@ function refreshAll() {
 /* ---------------- DASHBOARD ---------------- */
 ["fPeriodo", "fdProduto", "fdEquipe", "fdCorretor"].forEach((id) => $(id).onchange = renderDash);
 
-// Paleta dos gráficos (tokens do tema claro)
-const C = {
-  blue: "#007AFF", green: "#34C759", orange: "#FF9500", red: "#FF3B30", indigo: "#5856D6",
-  teal: "#5AC8FA", gray: "#8E8E93", grayLight: "#D1D1D6", grid: "#F0F0F3", text: "#1D1D1F", text2: "#6E6E73",
+// Paletas dos gráficos (claro e escuro)
+const PALETTES = {
+  light: { blue: "#007AFF", green: "#34C759", orange: "#FF9500", red: "#FF3B30", indigo: "#5856D6", teal: "#5AC8FA", gray: "#8E8E93",
+    grayLight: "#D1D1D6", grid: "#F0F0F3", text: "#1D1D1F", text2: "#6E6E73", surface: "#FFFFFF", line: "#D2D2D7",
+    tooltip: "rgba(255,255,255,.97)", blueFill: "rgba(0,122,255,.07)", blueSoft: "rgba(0,122,255,.4)", orangeSoft: "rgba(255,149,0,.45)" },
+  dark: { blue: "#0A84FF", green: "#30D158", orange: "#FF9F0A", red: "#FF453A", indigo: "#5E5CE6", teal: "#64D2FF", gray: "#8E8E93",
+    grayLight: "#48484A", grid: "#2C2C2E", text: "#F5F5F7", text2: "#A1A1A6", surface: "#1C1C1E", line: "#3A3A3C",
+    tooltip: "rgba(44,44,46,.97)", blueFill: "rgba(10,132,255,.14)", blueSoft: "rgba(10,132,255,.45)", orangeSoft: "rgba(255,159,10,.45)" },
 };
-const ETAPA_COLOR = { Iniciados: C.blue, Conversando: C.green, Negociando: C.orange, Vendido: C.indigo, Descartados: C.grayLight };
-const SERIES = [C.blue, C.green, C.orange, C.indigo, C.teal, C.gray];
+const C = {};
+const ETAPA_COLOR = {};
+const SERIES = [];
+let axisX, axisY;
+const temaAtual = () => (document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light");
+function applyChartTheme() {
+  Object.assign(C, PALETTES[temaAtual()]);
+  Object.assign(ETAPA_COLOR, { Iniciados: C.blue, Conversando: C.green, Negociando: C.orange, Vendido: C.indigo, Descartados: C.grayLight });
+  SERIES.splice(0, SERIES.length, C.blue, C.green, C.orange, C.indigo, C.teal, C.gray);
+  axisX = { grid: { display: false }, border: { display: false }, ticks: { color: C.text2 } };
+  axisY = { beginAtZero: true, grid: { color: C.grid }, border: { display: false }, ticks: { precision: 0, color: C.text2, padding: 6 } };
+  if (typeof Chart !== "undefined") {
+    Chart.defaults.color = C.text2;
+    Chart.defaults.borderColor = C.grid;
+    Object.assign(Chart.defaults.plugins.tooltip, { backgroundColor: C.tooltip, titleColor: C.text, bodyColor: C.text2, footerColor: C.text2, borderColor: C.line });
+  }
+}
+applyChartTheme();
+
+// Alternar tema claro/escuro (padrão: claro; a escolha fica salva no aparelho)
+function setTheme(t) {
+  if (t === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  else document.documentElement.removeAttribute("data-theme");
+  try { localStorage.setItem("painel-tema", t); } catch (e) {}
+  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = t === "dark" ? "#000000" : "#F5F5F7";
+  applyChartTheme();
+  Object.values(S.charts).forEach((ch) => ch.destroy()); S.charts = {};
+  if (S.view === "dash" && S.leads) renderDash();
+}
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-theme-toggle]")) setTheme(temaAtual() === "dark" ? "light" : "dark");
+});
+if (temaAtual() === "dark") { const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = "#000000"; }
 const PERIODO_TXT = { all: "todo o período", 7: "últimos 7 dias", 30: "últimos 30 dias", 90: "últimos 90 dias", 365: "último ano" };
 
 function matchFilters(l) {
@@ -235,12 +270,11 @@ function setupChartDefaults() {
   const d = Chart.defaults;
   d.font.family = getComputedStyle(document.body).fontFamily;
   d.font.size = 12;
-  d.color = C.text2;
-  d.borderColor = C.grid;
+  applyChartTheme();
   d.animation.duration = 450;
   d.animation.easing = "easeOutQuart";
   Object.assign(d.plugins.tooltip, {
-    backgroundColor: "rgba(255,255,255,.97)", titleColor: C.text, bodyColor: C.text2, borderColor: "#D2D2D7", borderWidth: 1,
+    backgroundColor: C.tooltip, titleColor: C.text, bodyColor: C.text2, footerColor: C.text2, borderColor: C.line, borderWidth: 1,
     padding: 10, cornerRadius: 10, boxPadding: 4, usePointStyle: true, titleFont: { weight: "600" }, displayColors: true,
     callbacks: { label: (c) => ` ${c.dataset.label ? c.dataset.label + ": " : ""}${Number(c.raw).toLocaleString("pt-BR")}` },
   });
@@ -275,8 +309,6 @@ function chart(id, cfg) {
   }
   S.charts[id] = new Chart($(id), cfg);
 }
-const axisX = { grid: { display: false }, border: { display: false }, ticks: { color: C.text2 } };
-const axisY = { beginAtZero: true, grid: { color: C.grid }, border: { display: false }, ticks: { precision: 0, color: C.text2, padding: 6 } };
 const hbar = (extra = {}) => ({
   responsive: true, maintainAspectRatio: false, indexAxis: "y",
   scales: { x: { ...axisY, ...(extra.x || {}) }, y: { grid: { display: false }, border: { display: false }, ticks: { color: C.text } } },
@@ -333,8 +365,8 @@ function renderDash() {
   $("hSemana").textContent = wk.length ? `média de ${media.toLocaleString("pt-BR")} por semana` : "";
   chart("cSemana", { type: "line",
     data: { labels: wk.map(([k]) => k.split("-").reverse().slice(0, 2).join("/")),
-      datasets: [{ label: "Leads", data: wk.map((x) => x[1]), borderColor: C.blue, borderWidth: 2, backgroundColor: "rgba(0,122,255,.07)", fill: true,
-        tension: .35, pointRadius: wk.length > 40 ? 0 : 2.5, pointHoverRadius: 5, pointBackgroundColor: "#fff", pointBorderColor: C.blue, pointBorderWidth: 2 }] },
+      datasets: [{ label: "Leads", data: wk.map((x) => x[1]), borderColor: C.blue, borderWidth: 2, backgroundColor: C.blueFill, fill: true,
+        tension: .35, pointRadius: wk.length > 40 ? 0 : 2.5, pointHoverRadius: 5, pointBackgroundColor: C.surface, pointBorderColor: C.blue, pointBorderWidth: 2 }] },
     options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
       plugins: { tooltip: { callbacks: { title: (i) => `Semana de ${i[0].label}` } } },
       scales: { x: { ...axisX, ticks: { color: C.text2, maxRotation: 0, autoSkipPadding: 18 } }, y: axisY } } });
@@ -351,7 +383,7 @@ function renderDash() {
 
   const eq = countBy(L, "equipe");
   chart("cEquipe", { type: "doughnut", plugins: [centerText],
-    data: { labels: eq.map((x) => x[0]), datasets: [{ data: eq.map((x) => x[1]), backgroundColor: SERIES, borderWidth: 3, borderColor: "#fff", hoverOffset: 4 }] },
+    data: { labels: eq.map((x) => x[0]), datasets: [{ data: eq.map((x) => x[1]), backgroundColor: SERIES, borderWidth: 3, borderColor: C.surface, hoverOffset: 4 }] },
     options: { responsive: true, maintainAspectRatio: false, cutout: "70%",
       plugins: { centerText: { value: total.toLocaleString("pt-BR"), label: "leads" },
         legend: { display: true, position: "right", labels: { usePointStyle: true, pointStyle: "circle", boxWidth: 7, boxHeight: 7, padding: 14, color: C.text,
@@ -369,24 +401,28 @@ function renderDash() {
     scales: { x: { ...axisX, stacked: true, ticks: { color: C.text2, autoSkip: false, maxRotation: 50, minRotation: 0 } }, y: { ...axisY, stacked: true } } } });
 
   const mot = countBy(L.filter((l) => l.etapa === "Descartados"), "motivoDescarte");
-  chart("cMotivo", { type: "bar", data: { labels: mot.map((x) => x[0]), datasets: [barDs(mot.map((x) => x[1]), mot.map((_, i) => (i === 0 ? C.orange : "rgba(255,149,0,.45)")), { label: "Leads" })] },
+  chart("cMotivo", { type: "bar", data: { labels: mot.map((x) => x[0]), datasets: [barDs(mot.map((x) => x[1]), mot.map((_, i) => (i === 0 ? C.orange : C.orangeSoft)), { label: "Leads" })] },
     options: hbar() });
 
-  // Feedback por corretor
+  // Feedback por corretor designado (pessoa com acesso ao painel), independente do período
   const temFb = (l) => !!l.ultimoFeedbackEm;
   const qtdFb = (l) => l.qtdFeedbacks || (temFb(l) ? 1 : 0);
-  const fbCor = countBy(L, "corretor").map(([c, n]) => {
-    const dele = L.filter((l) => (l.corretor || "Não informado") === c);
-    return { c, n, com: dele.filter(temFb).length, regs: dele.reduce((s, l) => s + qtdFb(l), 0) };
-  }).sort((a, b) => b.com - a.com || b.n - a.n);
-  const totCom = L.filter(temFb).length;
-  $("hFeedback").textContent = `${totCom.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} leads com feedback (${total ? Math.round((totCom / total) * 100) : 0}%)`;
+  const D = S.leads.filter((l) => l.responsavel && matchFilters(l));
+  const porResp = new Map();
+  D.forEach((l) => { if (!porResp.has(l.responsavel)) porResp.set(l.responsavel, []); porResp.get(l.responsavel).push(l); });
+  const fbCor = [...porResp.entries()].map(([email, dele]) => ({
+    email, c: userName(email), n: dele.length, com: dele.filter(temFb).length, regs: dele.reduce((s, l) => s + qtdFb(l), 0),
+  })).sort((a, b) => b.com - a.com || b.n - a.n);
+  const totCom = D.filter(temFb).length;
+  $("hFeedback").textContent = D.length
+    ? `${totCom.toLocaleString("pt-BR")} de ${D.length.toLocaleString("pt-BR")} leads designados com feedback (${Math.round((totCom / D.length) * 100)}%) · todo o período`
+    : "Nenhum lead designado ainda";
   chart("cFeedback", { type: "bar", data: { labels: fbCor.map((x) => x.c), datasets: [
     { label: "Com feedback", data: fbCor.map((x) => x.com), backgroundColor: C.blue, borderRadius: 4, maxBarThickness: 28 },
     { label: "Sem feedback", data: fbCor.map((x) => x.n - x.com), backgroundColor: C.grayLight, borderRadius: 4, maxBarThickness: 28 },
   ] }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
     onHover: (e, el) => { e.native.target.style.cursor = el.length ? "pointer" : "default"; },
-    onClick: (e, el) => { if (el.length) abrirClientes({ fCorretor: fbCor[el[0].index].c, fFeedback: "com" }); },
+    onClick: (e, el) => { if (el.length) abrirClientes({ fDesignado: fbCor[el[0].index].email, fFeedback: "com" }); },
     plugins: { tooltip: { callbacks: { footer: (items) => {
       const x = fbCor[items[0].dataIndex];
       return `${x.n ? Math.round((x.com / x.n) * 100) : 0}% com feedback · ${x.regs} feedback(s) registrado(s)`;
@@ -394,7 +430,7 @@ function renderDash() {
     scales: { x: { ...axisX, stacked: true, ticks: { color: C.text2, autoSkip: false, maxRotation: 50, minRotation: 0 } }, y: { ...axisY, stacked: true } } } });
 
   const ori = countBy(L, "origem").slice(0, 10);
-  chart("cOrigem", { type: "bar", data: { labels: ori.map((x) => x[0]), datasets: [barDs(ori.map((x) => x[1]), ori.map((_, i) => (i === 0 ? C.blue : "rgba(0,122,255,.4)")), { label: "Leads" })] },
+  chart("cOrigem", { type: "bar", data: { labels: ori.map((x) => x[0]), datasets: [barDs(ori.map((x) => x[1]), ori.map((_, i) => (i === 0 ? C.blue : C.blueSoft)), { label: "Leads" })] },
     options: hbar() });
 }
 
