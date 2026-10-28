@@ -408,6 +408,14 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
           <div class="box"><canvas id="cCorretor"></canvas></div></div>
       </div>
 
+      <div class="section-title">Feedbacks</div>
+      <div class="charts">
+        <div class="card chart wide tall"><header><div><h3>Feedback por corretor</h3><span class="hint" id="hFeedback"></span></div>
+          <div class="legend"><span><i style="background:var(--c-blue)"></i>Com feedback</span><span><i style="background:#D1D1D6"></i>Sem feedback</span></div></header>
+          <div class="box"><canvas id="cFeedback"></canvas></div>
+          <p class="note" style="margin:8px 0 0">Toque numa barra para ver os clientes com feedback daquele corretor.</p></div>
+      </div>
+
       <div class="section-title">Perdas e origem</div>
       <div class="charts">
         <div class="card chart"><header><h3>Motivos de descarte</h3><span class="hint">leads descartados</span></header><div class="box"><canvas id="cMotivo"></canvas></div></div>
@@ -427,6 +435,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
         <select class="select" id="fEtapa"></select>
         <select class="select" id="fCorretor"></select>
         <select class="select" id="fOrigem"></select>
+        <select class="select" id="fFeedback"></select>
         <select class="select adm" id="fDesignado"></select>
         <select class="select" id="fOrdem">
           <option value="recentes">Mais recentes</option>

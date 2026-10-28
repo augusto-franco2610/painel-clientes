@@ -44,7 +44,7 @@ service cloud.firestore {
         || (canWork(resource.data)
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
                  ['produto', 'etapa', 'motivoDescarte', 'atualizadoEm', 'atualizadoPor',
-                  'ultimoFeedback', 'ultimoFeedbackEm']));
+                  'ultimoFeedback', 'ultimoFeedbackEm', 'qtdFeedbacks']));
 
       match /feedbacks/{fid} {
         allow read: if isAdmin() || canWork(leadOf(id));

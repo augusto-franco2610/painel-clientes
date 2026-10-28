@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, onSnapshot,
-  addDoc, getDocs, orderBy, serverTimestamp, writeBatch }
+  addDoc, getDocs, orderBy, serverTimestamp, writeBatch, increment }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { firebaseConfig, ADMIN_EMAIL } from "./config.js";
 
@@ -178,6 +178,7 @@ function refreshAll() {
   fillSelect($("fEtapa"), "Todas as etapas", ETAPAS);
   fillSelect($("fCorretor"), "Todos os corretores", allCorretores());
   fillSelect($("fOrigem"), "Todas as origens", uniq("origem"));
+  fillSelect($("fFeedback"), "Feedback: todos", [{ v: "com", t: "Com feedback" }, { v: "sem", t: "Sem feedback" }]);
   const ativos = S.users.filter((u) => u.ativo);
   fillSelect($("fDesignado"), "Designação: todas", [{ v: "__none", t: "Sem designação" }, ...ativos.map((u) => ({ v: u.id, t: u.nome || u.id }))]);
   fillSelect($("bulkUser"), "Designar para…", [{ v: "__none", t: "— Remover designação —" }, ...ativos.map((u) => ({ v: u.id, t: u.nome || u.id }))]);
@@ -371,25 +372,55 @@ function renderDash() {
   chart("cMotivo", { type: "bar", data: { labels: mot.map((x) => x[0]), datasets: [barDs(mot.map((x) => x[1]), mot.map((_, i) => (i === 0 ? C.orange : "rgba(255,149,0,.45)")), { label: "Leads" })] },
     options: hbar() });
 
+  // Feedback por corretor
+  const temFb = (l) => !!l.ultimoFeedbackEm;
+  const qtdFb = (l) => l.qtdFeedbacks || (temFb(l) ? 1 : 0);
+  const fbCor = countBy(L, "corretor").map(([c, n]) => {
+    const dele = L.filter((l) => (l.corretor || "Não informado") === c);
+    return { c, n, com: dele.filter(temFb).length, regs: dele.reduce((s, l) => s + qtdFb(l), 0) };
+  }).sort((a, b) => b.com - a.com || b.n - a.n);
+  const totCom = L.filter(temFb).length;
+  $("hFeedback").textContent = `${totCom.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} leads com feedback (${total ? Math.round((totCom / total) * 100) : 0}%)`;
+  chart("cFeedback", { type: "bar", data: { labels: fbCor.map((x) => x.c), datasets: [
+    { label: "Com feedback", data: fbCor.map((x) => x.com), backgroundColor: C.blue, borderRadius: 4, maxBarThickness: 28 },
+    { label: "Sem feedback", data: fbCor.map((x) => x.n - x.com), backgroundColor: C.grayLight, borderRadius: 4, maxBarThickness: 28 },
+  ] }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+    onHover: (e, el) => { e.native.target.style.cursor = el.length ? "pointer" : "default"; },
+    onClick: (e, el) => { if (el.length) abrirClientes({ fCorretor: fbCor[el[0].index].c, fFeedback: "com" }); },
+    plugins: { tooltip: { callbacks: { footer: (items) => {
+      const x = fbCor[items[0].dataIndex];
+      return `${x.n ? Math.round((x.com / x.n) * 100) : 0}% com feedback · ${x.regs} feedback(s) registrado(s)`;
+    } } } },
+    scales: { x: { ...axisX, stacked: true, ticks: { color: C.text2, autoSkip: false, maxRotation: 50, minRotation: 0 } }, y: { ...axisY, stacked: true } } } });
+
   const ori = countBy(L, "origem").slice(0, 10);
   chart("cOrigem", { type: "bar", data: { labels: ori.map((x) => x[0]), datasets: [barDs(ori.map((x) => x[1]), ori.map((_, i) => (i === 0 ? C.blue : "rgba(0,122,255,.4)")), { label: "Leads" })] },
     options: hbar() });
 }
 
 /* ---------------- CLIENTES ---------------- */
-["q", "fProduto", "fEtapa", "fCorretor", "fOrigem", "fDesignado", "fOrdem"].forEach((id) => {
+function abrirClientes(filtros) {
+  ["fProduto", "fEtapa", "fCorretor", "fOrigem", "fFeedback", "fDesignado"].forEach((id) => $(id).value = "");
+  $("q").value = "";
+  Object.entries(filtros).forEach(([id, v]) => { if ([...$(id).options].some((o) => o.value === v)) $(id).value = v; });
+  S.shown = 60;
+  document.querySelector('#tabs button[data-v="clientes"]').click();
+}
+["q", "fProduto", "fEtapa", "fCorretor", "fOrigem", "fFeedback", "fDesignado", "fOrdem"].forEach((id) => {
   $(id).addEventListener(id === "q" ? "input" : "change", () => { S.shown = 60; renderClientes(); });
 });
 $("btnMore").onclick = () => { S.shown += 60; renderClientes(); };
 
 function filteredLeads() {
   const q = norm($("q").value), qd = $("q").value.replace(/\D/g, "");
-  const p = $("fProduto").value, e = $("fEtapa").value, c = $("fCorretor").value, d = $("fDesignado").value, ori = $("fOrigem").value;
+  const p = $("fProduto").value, e = $("fEtapa").value, c = $("fCorretor").value, d = $("fDesignado").value, ori = $("fOrigem").value, fb = $("fFeedback").value;
   let L = S.leads.filter((l) => {
     if (p && l.produto !== p) return false;
     if (e && l.etapa !== e) return false;
     if (c && l.corretor !== c) return false;
     if (ori && l.origem !== ori) return false;
+    if (fb === "com" && !l.ultimoFeedbackEm) return false;
+    if (fb === "sem" && l.ultimoFeedbackEm) return false;
     if (d === "__none" && l.responsavel) return false;
     if (d && d !== "__none" && l.responsavel !== d) return false;
     if (q) {
@@ -559,7 +590,7 @@ function openLead(id) {
     $("fbAdd").classList.add("loading");
     try {
       await addDoc(collection(db, "leads", id, "feedbacks"), { texto, autor: S.me.email, autorNome: S.me.nome, em: serverTimestamp() });
-      await updateDoc(doc(db, "leads", id), { ultimoFeedback: texto.slice(0, 200), ultimoFeedbackEm: serverTimestamp(), atualizadoEm: serverTimestamp(), atualizadoPor: S.me.email });
+      await updateDoc(doc(db, "leads", id), { ultimoFeedback: texto.slice(0, 200), ultimoFeedbackEm: serverTimestamp(), qtdFeedbacks: increment(1), atualizadoEm: serverTimestamp(), atualizadoPor: S.me.email });
       $("fbText").value = ""; toast("Feedback registrado.");
     } catch (e) { toast("Erro ao salvar feedback: " + e.code); }
     $("fbAdd")?.classList.remove("loading");
@@ -589,6 +620,55 @@ function toggleGestorBox() {
   if (g && !$("uCorretores").children.length) $("uCorretores").innerHTML = corretoresChecks();
 }
 $("uPapel").onchange = toggleGestorBox;
+
+// Descartados do corretor ainda não designados à pessoa, do mais antigo para o mais novo (data de entrada)
+function descartadosPara(u) {
+  const t = (l) => toDate(l.criadoEm)?.getTime() || 0;
+  return S.leads.filter((l) => l.corretor === u.apelido && l.etapa === "Descartados" && l.responsavel !== u.id)
+    .sort((a, b) => t(a) - t(b));
+}
+function openAutoAssign(u) {
+  const lista = descartadosPara(u);
+  if (!lista.length) return toast("Nenhum descartado pendente para este corretor.");
+  const nome = esc(u.nome || u.id);
+  $("sheet").innerHTML = `
+    <div class="hd">
+      <div class="avatar">${esc(initials(u.nome || u.id))}</div>
+      <div style="min-width:0"><h3>Designar descartados</h3>
+        <p class="note" style="margin:4px 0 0">Descartados de <b>${esc(u.apelido)}</b> para ${nome}, do mais antigo para o mais novo.</p></div>
+      <button class="x" id="mClose" aria-label="Fechar"><svg viewBox="0 0 14 14"><path d="M3 3l8 8M11 3l-8 8"/></svg></button>
+    </div>
+    <div class="bd">
+      <div class="form" style="padding:0;margin-bottom:12px">
+        <label>Quantidade<input class="field" id="aaQtd" type="number" min="1" max="${lista.length}" value="${lista.length}"></label>
+        <label>Disponíveis<input class="field" value="${lista.length} descartado(s)" disabled></label>
+      </div>
+      <p class="note" id="aaResumo" style="margin:0 0 12px"></p>
+      <div class="group" style="max-height:260px;overflow:auto"><div id="aaLista"></div></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn plain" id="aaCancel">Cancelar</button><button class="btn primary" id="aaOk">Designar</button>
+      </div>
+    </div>`;
+  const draw = () => {
+    const n = Math.max(1, Math.min(lista.length, parseInt($("aaQtd").value, 10) || 1));
+    if (String(n) !== $("aaQtd").value && $("aaQtd").value !== "") $("aaQtd").value = n;
+    const sel = lista.slice(0, n);
+    $("aaResumo").textContent = `${n} cliente(s), de ${fmtDate(sel[0].criadoEm)} a ${fmtDate(sel[n - 1].criadoEm)}.`;
+    $("aaLista").innerHTML = sel.map((l, i) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 14px;border-bottom:1px solid var(--c-line-soft);font-size:var(--fs-footnote)">
+      <span><span class="num" style="color:var(--c-text-3)">${i + 1}.</span> ${esc(l.nome || "Sem nome")}</span><span class="num" style="color:var(--c-text-3)">${fmtDate(l.criadoEm)}</span></div>`).join("");
+    return sel;
+  };
+  draw();
+  $("aaQtd").oninput = draw;
+  $("modal").classList.remove("hidden");
+  $("mClose").onclick = $("aaCancel").onclick = closeModal;
+  $("aaOk").onclick = async () => {
+    const sel = draw();
+    $("aaOk").classList.add("loading");
+    try { await assignMany(sel.map((l) => l.id), u.id); closeModal(); }
+    catch (e) { $("aaOk").classList.remove("loading"); toast("Erro ao designar: " + e.code); }
+  };
+}
 
 function openEquipe(u) {
   $("sheet").innerHTML = `
@@ -632,7 +712,7 @@ function renderEquipe() {
   const rows = [...S.users].sort((a, b) => (b.dono ? 1 : 0) - (a.dono ? 1 : 0) || clean(a.nome).localeCompare(clean(b.nome), "pt-BR"));
   $("usersBody").innerHTML = rows.map((u) => {
     const n = S.leads.filter((l) => l.responsavel === u.id).length;
-    const pend = u.apelido ? S.leads.filter((l) => l.corretor === u.apelido && l.responsavel !== u.id).length : 0;
+    const pend = u.apelido ? descartadosPara(u).length : 0;
     const papel = u.dono || u.papel === "admin" ? "Administrador" : u.papel === "gestor" ? "Gestor" : "Corretor";
     const cls = u.dono || u.papel === "admin" ? "s-Iniciados" : u.papel === "gestor" ? "s-Vendido" : "s-Conversando";
     const equipe = u.papel === "gestor" ? (u.corretores || []) : null;
@@ -641,7 +721,7 @@ function renderEquipe() {
       <td>${u.ativo ? `<span class="status ${cls}">${papel}</span>` : `<span class="status s-Descartados">Bloqueado</span>`}</td>
       <td>${equipe ? `<div style="max-width:260px"><small class="note" style="margin:0">Vê os clientes de:</small><br>${equipe.length ? esc(equipe.join(", ")) : "nenhum corretor"} <button class="btn plain sm" data-a="equipe">Editar</button></div>` : esc(u.apelido || "—")}</td>
       <td class="n">${n.toLocaleString("pt-BR")}</td>
-      <td><div class="rowact">${pend ? `<button class="btn tinted sm" data-a="sync">Designar +${pend}</button>` : ""}${u.dono ? "" : `
+      <td><div class="rowact">${pend ? `<button class="btn tinted sm" data-a="sync" title="Descartados de ${esc(u.apelido)}, do mais antigo ao mais novo">Designar descartados (${pend})</button>` : ""}${u.dono ? "" : `
         <button class="btn plain sm" data-a="toggle">${u.ativo ? "Bloquear" : "Reativar"}</button>
         <button class="btn danger sm" data-a="del">Remover</button>`}</div></td></tr>`;
   }).join("");
@@ -657,10 +737,7 @@ $("usersBody").onclick = async (e) => {
     await assignMany(S.leads.filter((l) => l.responsavel === id).map((l) => l.id), null);
     await deleteDoc(doc(db, "users", id)); toast("Acesso removido.");
   }
-  if (b.dataset.a === "sync") {
-    const ids = S.leads.filter((l) => l.corretor === u.apelido && l.responsavel !== id).map((l) => l.id);
-    if (confirm(`Designar ${ids.length} cliente(s) do corretor "${u.apelido}" para ${u.nome || id}?`)) await assignMany(ids, id);
-  }
+  if (b.dataset.a === "sync") openAutoAssign(u);
 };
 $("btnAddProd").onclick = async () => {
   const p = $("pNome").value.trim(); if (!p) return;
