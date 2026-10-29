@@ -154,7 +154,9 @@ main{max-width:1240px;margin:0 auto;padding:var(--s-8) var(--s-6) 96px}
 .btn.loading::before{content:"";width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
 
 /* ---------- KPIs ---------- */
-.kpis{display:grid;grid-template-columns:repeat(6,1fr)}
+.kpis{display:grid;grid-template-columns:repeat(7,1fr)}
+.kpi.link{cursor:pointer;border-radius:var(--r-lg);transition:background .15s}
+.kpi.link:hover{background:var(--c-hover)}
 .kpi{padding:var(--s-5) var(--s-5) var(--s-4);position:relative}
 .kpi + .kpi::before{content:"";position:absolute;left:0;top:20px;bottom:20px;width:1px;background:var(--c-line-soft)}
 .kpi .l{color:var(--c-text-2);font-size:var(--fs-footnote);font-weight:500;display:flex;align-items:center;gap:6px}
@@ -282,6 +284,20 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .ck input{accent-color:var(--c-blue);width:16px;height:16px;margin:0}
 .ck:has(input:checked){border-color:var(--c-blue);background:var(--c-blue-soft)}
 
+/* ---------- Comprou com outra imobiliária ---------- */
+.switch.sm{width:34px;height:20px}
+.switch.sm::after{width:16px;height:16px}
+.switch.sm:checked::after{transform:translateX(14px)}
+.switch:checked{background:var(--c-green)}
+.outra-row .switch:checked,.outra-big .switch:checked{background:var(--c-red)}
+.outra-row{display:flex;align-items:center;gap:8px;margin-top:var(--s-3);font-size:var(--fs-caption);color:var(--c-text-2);cursor:pointer;width:max-content;max-width:100%}
+.outra-row:has(input:checked){color:var(--c-red-ink);font-weight:500}
+.outra-tag{margin-top:var(--s-3);font-size:var(--fs-caption);color:var(--c-red-ink);font-weight:500}
+.ccard:has(.outra-row input:checked){border-color:var(--c-red-soft)}
+.outra-big{display:flex;align-items:center;justify-content:space-between;gap:var(--s-4);border:1px solid var(--c-line-soft);border-radius:var(--r-md);padding:var(--s-3) var(--s-4);margin-bottom:var(--s-5);cursor:pointer;transition:background .15s,border-color .15s}
+.outra-big.on{background:var(--c-red-soft);border-color:transparent}
+.outra-big b{font-weight:600;font-size:var(--fs-callout)}
+
 /* ---------- Importar ---------- */
 .drop{display:flex;flex-direction:column;align-items:center;gap:var(--s-2);border:1.5px dashed var(--c-line);border-radius:var(--r-lg);padding:var(--s-10) var(--s-4);text-align:center;cursor:pointer;transition:border-color .15s,background .15s;color:var(--c-text-2)}
 .drop:hover,.drop.over{border-color:var(--c-blue);background:var(--c-blue-soft)}
@@ -316,7 +332,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 /* ---------- Responsivo ---------- */
 @media (max-width:1100px){
   .kpis{grid-template-columns:repeat(3,1fr)}
-  .kpi:nth-child(4)::before{display:none}
+  .kpi:nth-child(4)::before,.kpi:nth-child(7)::before{display:none}
   .kpi:nth-child(n+4){border-top:1px solid var(--c-line-soft)}
 }
 @media (max-width:860px){
@@ -479,6 +495,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
         <select class="select" id="fCorretor"></select>
         <select class="select" id="fOrigem"></select>
         <select class="select" id="fFeedback"></select>
+        <select class="select" id="fOutra"></select>
         <select class="select adm" id="fDesignado"></select>
         <select class="select" id="fOrdem">
           <option value="recentes">Mais recentes</option>

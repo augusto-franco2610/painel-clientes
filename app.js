@@ -179,6 +179,7 @@ function refreshAll() {
   fillSelect($("fCorretor"), "Todos os corretores", allCorretores());
   fillSelect($("fOrigem"), "Todas as origens", uniq("origem"));
   fillSelect($("fFeedback"), "Feedback: todos", [{ v: "com", t: "Com feedback" }, { v: "sem", t: "Sem feedback" }]);
+  fillSelect($("fOutra"), "Outra imob.: todos", [{ v: "sim", t: "Comprou com outra" }, { v: "nao", t: "Não comprou com outra" }]);
   const ativos = S.users.filter((u) => u.ativo);
   fillSelect($("fDesignado"), "Designação: todas", [{ v: "__none", t: "Sem designação" }, ...ativos.map((u) => ({ v: u.id, t: u.nome || u.id }))]);
   fillSelect($("bulkUser"), "Designar para…", [{ v: "__none", t: "— Remover designação —" }, ...ativos.map((u) => ({ v: u.id, t: u.nome || u.id }))]);
@@ -316,14 +317,14 @@ const hbar = (extra = {}) => ({
 });
 const barDs = (data, color, extra = {}) => ({ data, backgroundColor: color, borderRadius: 6, barPercentage: .72, categoryPercentage: .9, maxBarThickness: 26, ...extra });
 
-function kpi({ label, value, dot, delta, deltaGood = "up", sub }) {
+function kpi({ label, value, dot, delta, deltaGood = "up", sub, link }) {
   let d = "";
   if (delta != null) {
     const dir = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
     const mood = deltaGood === "down" ? (dir === "up" ? " bad" : dir === "down" ? " good" : "") : "";
     d = `<span class="delta ${dir}${mood}">${delta > 0 ? "▲" : delta < 0 ? "▼" : "—"} ${Math.abs(delta)}%</span>`;
   }
-  return `<div class="kpi"><div class="l">${dot ? `<span class="dot" style="background:${dot}"></span>` : ""}${label}</div>
+  return `<div class="kpi${link ? " link" : ""}"${link ? ` data-link="${link}" role="button" tabindex="0"` : ""}><div class="l">${dot ? `<span class="dot" style="background:${dot}"></span>` : ""}${label}</div>
     <div class="v">${Number(value).toLocaleString("pt-BR")}</div><div class="s">${d}<span>${sub}</span></div></div>`;
 }
 const variacao = (atual, antes) => (antes == null || antes === 0 ? null : Math.round(((atual - antes) / antes) * 100));
@@ -339,6 +340,9 @@ function renderDash() {
   const desc = by("Descartados"), vend = by("Vendido"), ativos = ativosDe(L);
   const semResp = L.filter((l) => !l.responsavel).length;
   const fbs = L.filter((l) => l.ultimoFeedbackEm).length;
+  // Compraram com outra imobiliária: toda a base (com os filtros de produto/equipe/corretor), independe do período
+  const base = S.leads.filter(matchFilters);
+  const outra = base.filter((l) => l.compraOutra).length;
   const pct = (n) => (total ? `${Math.round((n / total) * 100)}% do período` : "—");
   const ref = dias === "all" ? "" : `vs. ${dias} dias anteriores`;
 
@@ -351,6 +355,7 @@ function renderDash() {
     kpi({ label: "Descartados", value: desc, dot: C.grayLight, delta: P ? variacao(desc, by("Descartados", P)) : null, deltaGood: "down", sub: pct(desc) }),
     S.admin ? kpi({ label: "Sem designação", value: semResp, dot: C.blue, sub: "aguardando corretor" })
             : kpi({ label: "Com feedback", value: fbs, dot: C.blue, sub: pct(fbs) }),
+    kpi({ label: "Outra imobiliária", value: outra, dot: C.red, sub: `compraram · ${base.length ? Math.round((outra / base.length) * 100) : 0}% da base`, link: "outra" }),
   ].join("");
 
   // Volume semanal
@@ -434,22 +439,27 @@ function renderDash() {
     options: hbar() });
 }
 
+$("kpis").addEventListener("click", (e) => {
+  const k = e.target.closest("[data-link]"); if (!k) return;
+  if (k.dataset.link === "outra") abrirClientes({ fOutra: "sim" });
+});
+
 /* ---------------- CLIENTES ---------------- */
 function abrirClientes(filtros) {
-  ["fProduto", "fEtapa", "fCorretor", "fOrigem", "fFeedback", "fDesignado"].forEach((id) => $(id).value = "");
+  ["fProduto", "fEtapa", "fCorretor", "fOrigem", "fFeedback", "fOutra", "fDesignado"].forEach((id) => $(id).value = "");
   $("q").value = "";
   Object.entries(filtros).forEach(([id, v]) => { if ([...$(id).options].some((o) => o.value === v)) $(id).value = v; });
   S.shown = 60;
   document.querySelector('#tabs button[data-v="clientes"]').click();
 }
-["q", "fProduto", "fEtapa", "fCorretor", "fOrigem", "fFeedback", "fDesignado", "fOrdem"].forEach((id) => {
+["q", "fProduto", "fEtapa", "fCorretor", "fOrigem", "fFeedback", "fOutra", "fDesignado", "fOrdem"].forEach((id) => {
   $(id).addEventListener(id === "q" ? "input" : "change", () => { S.shown = 60; renderClientes(); });
 });
 $("btnMore").onclick = () => { S.shown += 60; renderClientes(); };
 
 function filteredLeads() {
   const q = norm($("q").value), qd = $("q").value.replace(/\D/g, "");
-  const p = $("fProduto").value, e = $("fEtapa").value, c = $("fCorretor").value, d = $("fDesignado").value, ori = $("fOrigem").value, fb = $("fFeedback").value;
+  const p = $("fProduto").value, e = $("fEtapa").value, c = $("fCorretor").value, d = $("fDesignado").value, ori = $("fOrigem").value, fb = $("fFeedback").value, ou = $("fOutra").value;
   let L = S.leads.filter((l) => {
     if (p && l.produto !== p) return false;
     if (e && l.etapa !== e) return false;
@@ -457,6 +467,8 @@ function filteredLeads() {
     if (ori && l.origem !== ori) return false;
     if (fb === "com" && !l.ultimoFeedbackEm) return false;
     if (fb === "sem" && l.ultimoFeedbackEm) return false;
+    if (ou === "sim" && !l.compraOutra) return false;
+    if (ou === "nao" && l.compraOutra) return false;
     if (d === "__none" && l.responsavel) return false;
     if (d && d !== "__none" && l.responsavel !== d) return false;
     if (q) {
@@ -490,6 +502,8 @@ function renderClientes() {
         </div>
       </div>
       <div class="chips"><span class="status s-${esc(l.etapa)}">${esc(l.etapa || "—")}</span><span class="chip">${esc(l.produto || "Sem produto")}</span></div>
+      ${S.selMode ? (l.compraOutra ? `<div class="outra-tag">Comprou com outra imobiliária</div>` : "") : `
+      <label class="outra-row" data-outra="${esc(l.id)}"><input type="checkbox" class="switch sm" ${l.compraOutra ? "checked" : ""}><span>Comprou com outra imobiliária</span></label>`}
       ${l.ultimoFeedback ? `<div class="fb">${esc(l.ultimoFeedback)}</div>` : ""}
       <div class="meta"><span>${esc(l.corretor || "Sem corretor")}${S.admin && l.responsavel ? ` · ${esc(userName(l.responsavel))}` : ""}</span><span class="num">${fmtDate(l.criadoEm)}</span></div>
     </div>`).join("");
@@ -497,6 +511,7 @@ function renderClientes() {
 }
 
 $("grid").onclick = (e) => {
+  if (e.target.closest(".outra-row")) return; // o seletor não abre o card
   const card = e.target.closest(".ccard"); if (!card) return;
   const id = card.dataset.id;
   if (S.selMode) {
@@ -507,6 +522,25 @@ $("grid").onclick = (e) => {
   openLead(id);
 };
 $("grid").onkeydown = (e) => { if (e.key === "Enter" && e.target.classList.contains("ccard")) e.target.click(); };
+
+$("grid").addEventListener("change", (e) => {
+  const row = e.target.closest(".outra-row"); if (!row) return;
+  marcarOutra(row.dataset.outra, e.target.checked, e.target);
+});
+async function marcarOutra(id, valor, input) {
+  if (input) input.disabled = true;
+  try {
+    await updateDoc(doc(db, "leads", id), {
+      compraOutra: valor, compraOutraEm: valor ? serverTimestamp() : null, compraOutraPor: valor ? S.me.email : null,
+      atualizadoEm: serverTimestamp(), atualizadoPor: S.me.email,
+    });
+    toast(valor ? "Marcado: comprou com outra imobiliária" : "Marcação removida");
+  } catch (err) {
+    if (input) input.checked = !valor;
+    toast("Não foi possível salvar: " + err.code);
+  }
+  if (input) input.disabled = false;
+}
 
 /* Seleção em massa (admin) */
 $("btnSelMode").onclick = () => { S.selMode = !S.selMode; S.sel.clear(); $("btnSelMode").innerHTML = icon("select") + (S.selMode ? "Concluir" : "Selecionar"); updateBulk(); renderClientes(); };
@@ -582,6 +616,13 @@ function openLead(id) {
         </div>
       </div>
 
+      <label class="outra-big${l.compraOutra ? " on" : ""}" id="wOutra">
+        <span><b>Comprou com outra imobiliária</b><br><span class="note" style="margin:0" id="outraInfo">${l.compraOutra
+          ? `Marcado${l.compraOutraEm ? " em " + fmtDate(l.compraOutraEm) : ""}${l.compraOutraPor ? " por " + esc(userName(l.compraOutraPor)) : ""}`
+          : "Marque se o cliente já fechou negócio com outra imobiliária."}</span></span>
+        <input type="checkbox" class="switch" id="eOutra" ${l.compraOutra ? "checked" : ""}>
+      </label>
+
       <div class="group">
         <div class="gt">Atendimento</div>
         <div class="form">
@@ -607,6 +648,13 @@ function openLead(id) {
   $("modal").classList.remove("hidden");
   $("mClose").onclick = closeModal;
   $("eEtapa").onchange = () => $("wMotivo").classList.toggle("hidden", $("eEtapa").value !== "Descartados");
+  $("eOutra").onchange = async (e) => {
+    const v = e.target.checked;
+    $("wOutra").classList.toggle("on", v);
+    $("outraInfo").textContent = v ? "Marcado agora" : "Marque se o cliente já fechou negócio com outra imobiliária.";
+    await marcarOutra(id, v, e.target);
+    if (e.target.checked !== v) $("wOutra").classList.toggle("on", e.target.checked);
+  };
 
   $("eSave").onclick = async () => {
     const upd = { produto: $("eProduto").value, etapa: $("eEtapa").value, atualizadoEm: serverTimestamp(), atualizadoPor: S.me.email };
