@@ -154,8 +154,11 @@ main{max-width:1240px;margin:0 auto;padding:var(--s-8) var(--s-6) 96px}
 .btn.loading::before{content:"";width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
 
 /* ---------- KPIs ---------- */
-.kpis{display:grid;grid-template-columns:repeat(7,1fr)}
-.kpi.link{cursor:pointer;border-radius:var(--r-lg);transition:background .15s}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr)}
+.kpi:nth-child(4n+1)::before{display:none}
+.kpi:nth-child(n+5){border-top:1px solid var(--c-line-soft)}
+body.is-viewer .feed-hint{display:none}
+.kpi.link{cursor:pointer;transition:background .15s}
 .kpi.link:hover{background:var(--c-hover)}
 .kpi{padding:var(--s-5) var(--s-5) var(--s-4);position:relative}
 .kpi + .kpi::before{content:"";position:absolute;left:0;top:20px;bottom:20px;width:1px;background:var(--c-line-soft)}
@@ -339,9 +342,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 
 /* ---------- Responsivo ---------- */
 @media (max-width:1100px){
-  .kpis{grid-template-columns:repeat(3,1fr)}
-  .kpi:nth-child(4)::before,.kpi:nth-child(7)::before{display:none}
-  .kpi:nth-child(n+4){border-top:1px solid var(--c-line-soft)}
+  .kpi .v{font-size:26px}
 }
 @media (max-width:860px){
   .charts{grid-template-columns:1fr}
@@ -480,7 +481,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
         <div class="card chart wide tall"><header><div><h3>Feedback por corretor designado</h3><span class="hint" id="hFeedback"></span></div>
           <div class="legend"><span><i style="background:var(--c-blue)"></i>Com feedback</span><span><i style="background:var(--c-off)"></i>Sem feedback</span></div></header>
           <div class="box"><canvas id="cFeedback"></canvas></div>
-          <p class="note" style="margin:8px 0 0">Mostra quem recebeu os leads pelo painel. Toque numa barra para ver os clientes com feedback dessa pessoa.</p></div>
+          <p class="note feed-hint" style="margin:8px 0 0">Mostra quem recebeu os leads pelo painel. Toque numa barra para ver os clientes com feedback dessa pessoa.</p></div>
       </div>
 
       <div class="section-title">Perdas e origem</div>
@@ -529,6 +530,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
           <label>Papel<select class="select" id="uPapel">
             <option value="corretor">Corretor — vê os clientes designados</option>
             <option value="gestor">Gestor — vê os clientes dos corretores que você escolher</option>
+            <option value="visualizador">Visualizador — só a visão geral, sem abrir clientes</option>
             <option value="admin">Administrador — vê tudo</option>
           </select></label>
           <button class="btn primary" id="btnAddUser">Dar acesso</button>

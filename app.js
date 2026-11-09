@@ -98,6 +98,7 @@ onAuthStateChanged(auth, async (user) => {
       if (!snap.exists() || !snap.data().ativo) throw new Error("sem-acesso");
       S.profile = snap.data();
       S.admin = S.profile.papel === "admin";
+      S.viewer = S.profile.papel === "visualizador";
     }
   } catch (e) {
     $("loginMsg").textContent = `A conta ${email} não tem acesso a este painel. Peça ao administrador para liberar.`;
@@ -108,13 +109,17 @@ onAuthStateChanged(auth, async (user) => {
   if (S.me.foto) { $("avatar").referrerPolicy = "no-referrer"; $("avatar").src = S.me.foto; }
   else $("avatar").outerHTML = `<span class="ini" id="avatar">${initials(S.me.nome)}</span>`;
   document.querySelectorAll(".adm").forEach((el) => el.classList.toggle("hidden", !S.admin));
+  // Visualizador: só a visão geral
+  document.querySelector('#tabs button[data-v="clientes"]').classList.toggle("hidden", !!S.viewer);
+  document.body.classList.toggle("is-viewer", !!S.viewer);
+  if (S.viewer && S.view !== "dash") document.querySelector('#tabs button[data-v="dash"]').click();
   startListeners();
 });
 
 function startListeners() {
   $("loadingBar").classList.remove("hidden");
   const col = collection(db, "leads");
-  const queries = S.admin ? [["todos", col]] : [["meus", query(col, where("responsavel", "==", S.me.email))]];
+  const queries = (S.admin || S.viewer) ? [["todos", col]] : [["meus", query(col, where("responsavel", "==", S.me.email))]];
   if (!S.admin && S.profile?.papel === "gestor") {
     (S.profile.corretores || []).forEach((c) => queries.push(["c:" + c, query(col, where("corretor", "==", c))]));
   }
@@ -138,7 +143,7 @@ function startListeners() {
     refreshAll();
   }, () => {}));
 
-  if (S.admin) {
+  if (S.admin || S.viewer) {
     S.unsub.push(onSnapshot(collection(db, "users"), (snap) => {
       S.users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       refreshAll();
@@ -151,6 +156,7 @@ function startListeners() {
 /* ---------------- NAVEGAÇÃO ---------------- */
 $("tabs").onclick = (e) => {
   const b = e.target.closest("button"); if (!b) return;
+  if (S.viewer && b.dataset.v !== "dash") return;
   S.view = b.dataset.v;
   document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("on", x === b));
   ["dash", "clientes", "equipe", "importar"].forEach((v) => $("v-" + v).classList.toggle("hidden", v !== S.view));
@@ -181,7 +187,7 @@ function refreshAll() {
   fillSelect($("fFeedback"), "Feedback: todos", [{ v: "com", t: "Com feedback" }, { v: "sem", t: "Sem feedback" }]);
   fillSelect($("fReativado"), "Reativado: todos", [{ v: "sim", t: "Reativados" }, { v: "nao", t: "Não reativados" }]);
   fillSelect($("fOutra"), "Outra imob.: todos", [{ v: "sim", t: "Comprou com outra" }, { v: "nao", t: "Não comprou com outra" }]);
-  const ativos = S.users.filter((u) => u.ativo);
+  const ativos = S.users.filter((u) => u.ativo && u.papel !== "visualizador");
   fillSelect($("fDesignado"), "Designação: todas", [{ v: "__none", t: "Sem designação" }, ...ativos.map((u) => ({ v: u.id, t: u.nome || u.id }))]);
   fillSelect($("bulkUser"), "Designar para…", [{ v: "__none", t: "— Remover designação —" }, ...ativos.map((u) => ({ v: u.id, t: u.nome || u.id }))]);
   fillSelect($("uApelido"), "Corretor no CRM (opcional)", uniq("corretor"));
@@ -344,6 +350,9 @@ function renderDash() {
   // Compraram com outra imobiliária: toda a base (com os filtros de produto/equipe/corretor), independe do período
   const base = S.leads.filter(matchFilters);
   const outra = base.filter((l) => l.compraOutra).length;
+  const reat = base.filter((l) => l.reativado).length;
+  const pb = (n) => `${base.length ? Math.round((n / base.length) * 100) : 0}% da base`;
+  const ln = (k) => (S.viewer ? undefined : k);
   const pct = (n) => (total ? `${Math.round((n / total) * 100)}% do período` : "—");
   const ref = dias === "all" ? "" : `vs. ${dias} dias anteriores`;
 
@@ -354,9 +363,10 @@ function renderDash() {
     kpi({ label: "Negociando", value: by("Negociando"), dot: C.orange, sub: pct(by("Negociando")) }),
     kpi({ label: "Vendidos", value: vend, dot: C.indigo, sub: pct(vend) }),
     kpi({ label: "Descartados", value: desc, dot: C.grayLight, delta: P ? variacao(desc, by("Descartados", P)) : null, deltaGood: "down", sub: pct(desc) }),
-    S.admin ? kpi({ label: "Sem designação", value: semResp, dot: C.blue, sub: "aguardando corretor" })
+    (S.admin || S.viewer) ? kpi({ label: "Sem designação", value: semResp, dot: C.blue, sub: "aguardando corretor" })
             : kpi({ label: "Com feedback", value: fbs, dot: C.blue, sub: pct(fbs) }),
-    kpi({ label: "Outra imobiliária", value: outra, dot: C.red, sub: `compraram · ${base.length ? Math.round((outra / base.length) * 100) : 0}% da base`, link: "outra" }),
+    kpi({ label: "Reativados", value: reat, dot: C.green, sub: `clientes · ${pb(reat)}`, link: ln("reativados") }),
+    kpi({ label: "Outra imobiliária", value: outra, dot: C.red, sub: `compraram · ${pb(outra)}`, link: ln("outra") }),
   ].join("");
 
   // Volume semanal
@@ -427,8 +437,8 @@ function renderDash() {
     { label: "Com feedback", data: fbCor.map((x) => x.com), backgroundColor: C.blue, borderRadius: 4, maxBarThickness: 28 },
     { label: "Sem feedback", data: fbCor.map((x) => x.n - x.com), backgroundColor: C.grayLight, borderRadius: 4, maxBarThickness: 28 },
   ] }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
-    onHover: (e, el) => { e.native.target.style.cursor = el.length ? "pointer" : "default"; },
-    onClick: (e, el) => { if (el.length) abrirClientes({ fDesignado: fbCor[el[0].index].email, fFeedback: "com" }); },
+    onHover: (e, el) => { e.native.target.style.cursor = el.length && !S.viewer ? "pointer" : "default"; },
+    onClick: (e, el) => { if (el.length && !S.viewer) abrirClientes({ fDesignado: fbCor[el[0].index].email, fFeedback: "com" }); },
     plugins: { tooltip: { callbacks: { footer: (items) => {
       const x = fbCor[items[0].dataIndex];
       return `${x.n ? Math.round((x.com / x.n) * 100) : 0}% com feedback · ${x.regs} feedback(s) registrado(s)`;
@@ -443,6 +453,7 @@ function renderDash() {
 $("kpis").addEventListener("click", (e) => {
   const k = e.target.closest("[data-link]"); if (!k) return;
   if (k.dataset.link === "outra") abrirClientes({ fOutra: "sim" });
+  if (k.dataset.link === "reativados") abrirClientes({ fReativado: "sim" });
 });
 
 /* ---------------- CLIENTES ---------------- */
@@ -594,7 +605,7 @@ function openLead(id) {
     const list = cur && !arr.includes(cur) ? [cur, ...arr] : arr;
     return `<option value="">—</option>` + list.map((v) => `<option ${v === cur ? "selected" : ""}>${esc(v)}</option>`).join("");
   };
-  const usersOpt = `<option value="">— Sem designação —</option>` + S.users.filter((u) => u.ativo)
+  const usersOpt = `<option value="">— Sem designação —</option>` + S.users.filter((u) => u.ativo && u.papel !== "visualizador")
     .map((u) => `<option value="${esc(u.id)}" ${u.id === l.responsavel ? "selected" : ""}>${esc(u.nome || u.id)}</option>`).join("");
 
   const kv = (k, v) => `<div><small>${k}</small><span>${v}</span></div>`;
@@ -823,8 +834,8 @@ function renderEquipe() {
   $("usersBody").innerHTML = rows.map((u) => {
     const n = S.leads.filter((l) => l.responsavel === u.id).length;
     const pend = u.apelido ? descartadosPara(u).length : 0;
-    const papel = u.dono || u.papel === "admin" ? "Administrador" : u.papel === "gestor" ? "Gestor" : "Corretor";
-    const cls = u.dono || u.papel === "admin" ? "s-Iniciados" : u.papel === "gestor" ? "s-Vendido" : "s-Conversando";
+    const papel = u.dono || u.papel === "admin" ? "Administrador" : u.papel === "gestor" ? "Gestor" : u.papel === "visualizador" ? "Visualizador" : "Corretor";
+    const cls = u.dono || u.papel === "admin" ? "s-Iniciados" : u.papel === "gestor" ? "s-Vendido" : u.papel === "visualizador" ? "s-Negociando" : "s-Conversando";
     const equipe = u.papel === "gestor" ? (u.corretores || []) : null;
     return `<tr data-u="${esc(u.id)}">
       <td><div class="person"><div class="avatar">${esc(initials(u.nome || u.id))}</div><div><b>${esc(u.nome || u.id)}</b><small>${esc(u.id)}</small></div></div></td>

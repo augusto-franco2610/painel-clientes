@@ -14,10 +14,13 @@ service cloud.firestore {
     function isAdmin() {
       return isOwner() || (isMember() && get(profilePath()).data.papel == 'admin');
     }
+    function isViewer() {
+      return isMember() && get(profilePath()).data.papel == 'visualizador';
+    }
     function leadOf(id) { return get(/databases/$(db)/documents/leads/$(id)).data; }
     // Pode trabalhar no cliente: designado a ele, ou gestor do corretor do cliente
     function canWork(lead) {
-      return isMember() && (
+      return isMember() && get(profilePath()).data.papel != 'visualizador' && (
         lead.responsavel == myEmail()
         || (get(profilePath()).data.papel == 'gestor'
             && lead.corretor in get(profilePath()).data.get('corretores', []))
@@ -26,7 +29,7 @@ service cloud.firestore {
 
     // Pessoas com acesso
     match /users/{uid} {
-      allow read: if isAdmin() || (signedIn() && uid == myEmail());
+      allow read: if isAdmin() || isViewer() || (signedIn() && uid == myEmail());
       allow write: if isAdmin();
     }
 
@@ -38,7 +41,7 @@ service cloud.firestore {
 
     // Clientes
     match /leads/{id} {
-      allow read: if isAdmin() || canWork(resource.data);
+      allow read: if isAdmin() || isViewer() || canWork(resource.data);
       allow create, delete: if isAdmin();
       allow update: if isAdmin()
         || (canWork(resource.data)
