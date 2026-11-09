@@ -45,7 +45,8 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
                  ['produto', 'etapa', 'motivoDescarte', 'atualizadoEm', 'atualizadoPor',
                   'ultimoFeedback', 'ultimoFeedbackEm', 'qtdFeedbacks',
-                  'compraOutra', 'compraOutraEm', 'compraOutraPor']));
+                  'compraOutra', 'compraOutraEm', 'compraOutraPor',
+                  'reativado', 'reativadoEm', 'reativadoPor']));
 
       match /feedbacks/{fid} {
         allow read: if isAdmin() || canWork(leadOf(id));

@@ -179,6 +179,7 @@ function refreshAll() {
   fillSelect($("fCorretor"), "Todos os corretores", allCorretores());
   fillSelect($("fOrigem"), "Todas as origens", uniq("origem"));
   fillSelect($("fFeedback"), "Feedback: todos", [{ v: "com", t: "Com feedback" }, { v: "sem", t: "Sem feedback" }]);
+  fillSelect($("fReativado"), "Reativado: todos", [{ v: "sim", t: "Reativados" }, { v: "nao", t: "Não reativados" }]);
   fillSelect($("fOutra"), "Outra imob.: todos", [{ v: "sim", t: "Comprou com outra" }, { v: "nao", t: "Não comprou com outra" }]);
   const ativos = S.users.filter((u) => u.ativo);
   fillSelect($("fDesignado"), "Designação: todas", [{ v: "__none", t: "Sem designação" }, ...ativos.map((u) => ({ v: u.id, t: u.nome || u.id }))]);
@@ -446,20 +447,20 @@ $("kpis").addEventListener("click", (e) => {
 
 /* ---------------- CLIENTES ---------------- */
 function abrirClientes(filtros) {
-  ["fProduto", "fEtapa", "fCorretor", "fOrigem", "fFeedback", "fOutra", "fDesignado"].forEach((id) => $(id).value = "");
+  ["fProduto", "fEtapa", "fCorretor", "fOrigem", "fFeedback", "fReativado", "fOutra", "fDesignado"].forEach((id) => $(id).value = "");
   $("q").value = "";
   Object.entries(filtros).forEach(([id, v]) => { if ([...$(id).options].some((o) => o.value === v)) $(id).value = v; });
   S.shown = 60;
   document.querySelector('#tabs button[data-v="clientes"]').click();
 }
-["q", "fProduto", "fEtapa", "fCorretor", "fOrigem", "fFeedback", "fOutra", "fDesignado", "fOrdem"].forEach((id) => {
+["q", "fProduto", "fEtapa", "fCorretor", "fOrigem", "fFeedback", "fReativado", "fOutra", "fDesignado", "fOrdem"].forEach((id) => {
   $(id).addEventListener(id === "q" ? "input" : "change", () => { S.shown = 60; renderClientes(); });
 });
 $("btnMore").onclick = () => { S.shown += 60; renderClientes(); };
 
 function filteredLeads() {
   const q = norm($("q").value), qd = $("q").value.replace(/\D/g, "");
-  const p = $("fProduto").value, e = $("fEtapa").value, c = $("fCorretor").value, d = $("fDesignado").value, ori = $("fOrigem").value, fb = $("fFeedback").value, ou = $("fOutra").value;
+  const p = $("fProduto").value, e = $("fEtapa").value, c = $("fCorretor").value, d = $("fDesignado").value, ori = $("fOrigem").value, fb = $("fFeedback").value, ou = $("fOutra").value, re = $("fReativado").value;
   let L = S.leads.filter((l) => {
     if (p && l.produto !== p) return false;
     if (e && l.etapa !== e) return false;
@@ -469,6 +470,8 @@ function filteredLeads() {
     if (fb === "sem" && l.ultimoFeedbackEm) return false;
     if (ou === "sim" && !l.compraOutra) return false;
     if (ou === "nao" && l.compraOutra) return false;
+    if (re === "sim" && !l.reativado) return false;
+    if (re === "nao" && l.reativado) return false;
     if (d === "__none" && l.responsavel) return false;
     if (d && d !== "__none" && l.responsavel !== d) return false;
     if (q) {
@@ -502,8 +505,11 @@ function renderClientes() {
         </div>
       </div>
       <div class="chips"><span class="status s-${esc(l.etapa)}">${esc(l.etapa || "—")}</span><span class="chip">${esc(l.produto || "Sem produto")}</span></div>
-      ${S.selMode ? (l.compraOutra ? `<div class="outra-tag">Comprou com outra imobiliária</div>` : "") : `
-      <label class="outra-row" data-outra="${esc(l.id)}"><input type="checkbox" class="switch sm" ${l.compraOutra ? "checked" : ""}><span>Comprou com outra imobiliária</span></label>`}
+      ${S.selMode
+        ? (l.reativado ? `<div class="reat-tag">Cliente reativado</div>` : "") + (l.compraOutra ? `<div class="outra-tag">Comprou com outra imobiliária</div>` : "")
+        : `<div class="flags">
+      <label class="reat-row" data-flag="reativado" data-id="${esc(l.id)}"><input type="checkbox" class="switch sm" ${l.reativado ? "checked" : ""}><span>Cliente reativado</span></label>
+      <label class="outra-row" data-flag="compraOutra" data-id="${esc(l.id)}"><input type="checkbox" class="switch sm" ${l.compraOutra ? "checked" : ""}><span>Comprou com outra imobiliária</span></label></div>`}
       ${l.ultimoFeedback ? `<div class="fb">${esc(l.ultimoFeedback)}</div>` : ""}
       <div class="meta"><span>${esc(l.corretor || "Sem corretor")}${S.admin && l.responsavel ? ` · ${esc(userName(l.responsavel))}` : ""}</span><span class="num">${fmtDate(l.criadoEm)}</span></div>
     </div>`).join("");
@@ -511,7 +517,7 @@ function renderClientes() {
 }
 
 $("grid").onclick = (e) => {
-  if (e.target.closest(".outra-row")) return; // o seletor não abre o card
+  if (e.target.closest("[data-flag]")) return; // as chaves não abrem o card
   const card = e.target.closest(".ccard"); if (!card) return;
   const id = card.dataset.id;
   if (S.selMode) {
@@ -524,17 +530,23 @@ $("grid").onclick = (e) => {
 $("grid").onkeydown = (e) => { if (e.key === "Enter" && e.target.classList.contains("ccard")) e.target.click(); };
 
 $("grid").addEventListener("change", (e) => {
-  const row = e.target.closest(".outra-row"); if (!row) return;
-  marcarOutra(row.dataset.outra, e.target.checked, e.target);
+  const row = e.target.closest("[data-flag]"); if (!row) return;
+  marcarFlag(row.dataset.id, row.dataset.flag, e.target.checked, e.target);
 });
-async function marcarOutra(id, valor, input) {
+const FLAGS = {
+  compraOutra: { em: "compraOutraEm", por: "compraOutraPor", on: "Marcado: comprou com outra imobiliária", off: "Marcação removida" },
+  reativado: { em: "reativadoEm", por: "reativadoPor", on: "Marcado: cliente reativado", off: "Reativação removida" },
+};
+const marcarOutra = (id, valor, input) => marcarFlag(id, "compraOutra", valor, input);
+async function marcarFlag(id, campo, valor, input) {
+  const f = FLAGS[campo];
   if (input) input.disabled = true;
   try {
     await updateDoc(doc(db, "leads", id), {
-      compraOutra: valor, compraOutraEm: valor ? serverTimestamp() : null, compraOutraPor: valor ? S.me.email : null,
+      [campo]: valor, [f.em]: valor ? serverTimestamp() : null, [f.por]: valor ? S.me.email : null,
       atualizadoEm: serverTimestamp(), atualizadoPor: S.me.email,
     });
-    toast(valor ? "Marcado: comprou com outra imobiliária" : "Marcação removida");
+    toast(valor ? f.on : f.off);
   } catch (err) {
     if (input) input.checked = !valor;
     toast("Não foi possível salvar: " + err.code);
@@ -616,6 +628,13 @@ function openLead(id) {
         </div>
       </div>
 
+      <label class="reat-big${l.reativado ? " on" : ""}" id="wReat">
+        <span><b>Cliente reativado</b><br><span class="note" style="margin:0" id="reatInfo">${l.reativado
+          ? `Marcado${l.reativadoEm ? " em " + fmtDate(l.reativadoEm) : ""}${l.reativadoPor ? " por " + esc(userName(l.reativadoPor)) : ""}`
+          : "Marque quando o cliente voltar a conversar depois de parado ou descartado."}</span></span>
+        <input type="checkbox" class="switch" id="eReat" ${l.reativado ? "checked" : ""}>
+      </label>
+
       <label class="outra-big${l.compraOutra ? " on" : ""}" id="wOutra">
         <span><b>Comprou com outra imobiliária</b><br><span class="note" style="margin:0" id="outraInfo">${l.compraOutra
           ? `Marcado${l.compraOutraEm ? " em " + fmtDate(l.compraOutraEm) : ""}${l.compraOutraPor ? " por " + esc(userName(l.compraOutraPor)) : ""}`
@@ -648,6 +667,13 @@ function openLead(id) {
   $("modal").classList.remove("hidden");
   $("mClose").onclick = closeModal;
   $("eEtapa").onchange = () => $("wMotivo").classList.toggle("hidden", $("eEtapa").value !== "Descartados");
+  $("eReat").onchange = async (e) => {
+    const v = e.target.checked;
+    $("wReat").classList.toggle("on", v);
+    $("reatInfo").textContent = v ? "Marcado agora" : "Marque quando o cliente voltar a conversar depois de parado ou descartado.";
+    await marcarFlag(id, "reativado", v, e.target);
+    if (e.target.checked !== v) $("wReat").classList.toggle("on", e.target.checked);
+  };
   $("eOutra").onchange = async (e) => {
     const v = e.target.checked;
     $("wOutra").classList.toggle("on", v);

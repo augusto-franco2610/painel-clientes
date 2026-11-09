@@ -290,6 +290,14 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .switch.sm:checked::after{transform:translateX(14px)}
 .switch:checked{background:var(--c-green)}
 .outra-row .switch:checked,.outra-big .switch:checked{background:var(--c-red)}
+.flags{display:flex;flex-direction:column;gap:6px;margin-top:var(--s-3)}
+.flags .outra-row,.flags .reat-row{margin-top:0}
+.reat-row{display:flex;align-items:center;gap:8px;margin-top:var(--s-3);font-size:var(--fs-caption);color:var(--c-text-2);cursor:pointer;width:max-content;max-width:100%}
+.reat-row:has(input:checked){color:var(--c-green-ink);font-weight:500}
+.reat-tag{margin-top:var(--s-3);font-size:var(--fs-caption);color:var(--c-green-ink);font-weight:500}
+.reat-big{display:flex;align-items:center;justify-content:space-between;gap:var(--s-4);border:1px solid var(--c-line-soft);border-radius:var(--r-md);padding:var(--s-3) var(--s-4);margin-bottom:var(--s-3);cursor:pointer;transition:background .15s,border-color .15s}
+.reat-big.on{background:var(--c-green-soft);border-color:transparent}
+.reat-big b{font-weight:600;font-size:var(--fs-callout)}
 .outra-row{display:flex;align-items:center;gap:8px;margin-top:var(--s-3);font-size:var(--fs-caption);color:var(--c-text-2);cursor:pointer;width:max-content;max-width:100%}
 .outra-row:has(input:checked){color:var(--c-red-ink);font-weight:500}
 .outra-tag{margin-top:var(--s-3);font-size:var(--fs-caption);color:var(--c-red-ink);font-weight:500}
@@ -495,6 +503,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
         <select class="select" id="fCorretor"></select>
         <select class="select" id="fOrigem"></select>
         <select class="select" id="fFeedback"></select>
+        <select class="select" id="fReativado"></select>
         <select class="select" id="fOutra"></select>
         <select class="select adm" id="fDesignado"></select>
         <select class="select" id="fOrdem">
