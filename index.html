@@ -173,6 +173,21 @@ body.is-viewer .feed-hint{display:none}
 .delta.up.bad{color:var(--c-red-ink);background:var(--c-red-soft)}
 .delta.down.good{color:var(--c-green-ink);background:var(--c-green-soft)}
 
+/* ---------- Card de designação ---------- */
+.desig{display:grid;grid-template-columns:1.1fr 1fr 1fr;margin-top:var(--s-3)}
+.dg-item{padding:var(--s-5);position:relative;min-width:0}
+.dg-item + .dg-item::before{content:"";position:absolute;left:0;top:20px;bottom:20px;width:1px;background:var(--c-line-soft)}
+.dg-item .l{color:var(--c-text-2);font-size:var(--fs-footnote);font-weight:500;display:flex;align-items:center;gap:6px}
+.dg-item .l .dot{width:7px;height:7px;border-radius:50%}
+.dg-item .v{font-size:30px;font-weight:600;letter-spacing:-.03em;line-height:1.15;font-variant-numeric:tabular-nums}
+.dg-item.main .v{margin:6px 0 4px}
+.dg-item .s{font-size:var(--fs-caption);color:var(--c-text-3)}
+.dg-num{display:flex;align-items:baseline;gap:8px;margin:6px 0 10px}
+.dg-bar{height:6px;border-radius:999px;background:var(--c-fill-2);overflow:hidden}
+.dg-bar i{display:block;height:100%;border-radius:999px;transition:width .5s var(--ease)}
+.dg-item.link{cursor:pointer;transition:background .15s}
+.dg-item.link:hover{background:var(--c-hover)}
+
 /* ---------- Gráficos ---------- */
 .charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s-4)}
 .chart{padding:var(--s-5) var(--s-5) var(--s-4)}
@@ -362,6 +377,11 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
   main{padding:var(--s-5) var(--s-4) 110px}
   .page-head h1{font-size:24px}
   .kpis{grid-template-columns:repeat(2,1fr)}
+  .desig{grid-template-columns:1fr}
+  .dg-item{padding:var(--s-4)}
+  .dg-item + .dg-item::before{display:none}
+  .dg-item + .dg-item{border-top:1px solid var(--c-line-soft)}
+  .dg-item .v{font-size:24px}
   .kpi{padding:var(--s-4)}
   .kpi::before{display:none!important}
   .kpi:nth-child(n+3){border-top:1px solid var(--c-line-soft)}
@@ -455,6 +475,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
       </div>
 
       <div class="card kpis" id="kpis"></div>
+      <div class="card desig" id="desig"></div>
 
       <div class="section-title">Volume</div>
       <div class="charts">

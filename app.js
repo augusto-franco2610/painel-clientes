@@ -188,7 +188,7 @@ function refreshAll() {
   fillSelect($("fReativado"), "Reativado: todos", [{ v: "sim", t: "Reativados" }, { v: "nao", t: "Não reativados" }]);
   fillSelect($("fOutra"), "Outra imob.: todos", [{ v: "sim", t: "Comprou com outra" }, { v: "nao", t: "Não comprou com outra" }]);
   const ativos = S.users.filter((u) => u.ativo && u.papel !== "visualizador");
-  fillSelect($("fDesignado"), "Designação: todas", [{ v: "__none", t: "Sem designação" }, ...ativos.map((u) => ({ v: u.id, t: u.nome || u.id }))]);
+  fillSelect($("fDesignado"), "Designação: todas", [{ v: "__any", t: "Com designação" }, { v: "__none", t: "Sem designação" }, ...ativos.map((u) => ({ v: u.id, t: u.nome || u.id }))]);
   fillSelect($("bulkUser"), "Designar para…", [{ v: "__none", t: "— Remover designação —" }, ...ativos.map((u) => ({ v: u.id, t: u.nome || u.id }))]);
   fillSelect($("uApelido"), "Corretor no CRM (opcional)", uniq("corretor"));
   if (S.view === "dash") renderDash();
@@ -368,6 +368,7 @@ function renderDash() {
     kpi({ label: "Reativados", value: reat, dot: C.green, sub: `clientes · ${pb(reat)}`, link: ln("reativados") }),
     kpi({ label: "Outra imobiliária", value: outra, dot: C.red, sub: `compraram · ${pb(outra)}`, link: ln("outra") }),
   ].join("");
+  renderDesignados(base);
 
   // Volume semanal
   const weeks = new Map();
@@ -450,6 +451,38 @@ function renderDash() {
     options: hbar() });
 }
 
+// Card "Leads com designação": quantidade e, entre eles, % reativados e % que compraram com outra imobiliária
+function renderDesignados(base) {
+  const D = base.filter((l) => l.responsavel);
+  const n = D.length;
+  const r = D.filter((l) => l.reativado).length;
+  const o = D.filter((l) => l.compraOutra).length;
+  const p = (x) => (n ? Math.round((x / n) * 100) : 0);
+  const pessoas = new Set(D.map((l) => l.responsavel)).size;
+  const link = S.admin; // só o administrador abre a lista filtrada
+  const meter = (label, x, cor, key) => `
+    <div class="dg-item${link ? " link" : ""}"${link ? ` data-dg="${key}" role="button" tabindex="0"` : ""}>
+      <div class="l"><span class="dot" style="background:${cor}"></span>${label}</div>
+      <div class="dg-num"><span class="v">${p(x)}%</span><span class="s">${x.toLocaleString("pt-BR")} de ${n.toLocaleString("pt-BR")}</span></div>
+      <div class="dg-bar"><i style="width:${p(x)}%;background:${cor}"></i></div>
+    </div>`;
+  $("desig").innerHTML = `
+    <div class="dg-item main${link ? " link" : ""}"${link ? ` data-dg="todos" role="button" tabindex="0"` : ""}>
+      <div class="l"><span class="dot" style="background:${C.blue}"></span>Leads com designação</div>
+      <div class="v">${n.toLocaleString("pt-BR")}</div>
+      <div class="s">${pessoas} ${pessoas === 1 ? "pessoa" : "pessoas"} · ${base.length ? Math.round((n / base.length) * 100) : 0}% da base · todo o período</div>
+    </div>
+    ${meter("Reativados", r, C.green, "reativados")}
+    ${meter("Compraram com outra imobiliária", o, C.red, "outra")}`;
+}
+$("desig").addEventListener("click", (e) => {
+  const k = e.target.closest("[data-dg]"); if (!k) return;
+  const f = { fDesignado: "__any" };
+  if (k.dataset.dg === "reativados") f.fReativado = "sim";
+  if (k.dataset.dg === "outra") f.fOutra = "sim";
+  abrirClientes(f);
+});
+
 $("kpis").addEventListener("click", (e) => {
   const k = e.target.closest("[data-link]"); if (!k) return;
   if (k.dataset.link === "outra") abrirClientes({ fOutra: "sim" });
@@ -484,7 +517,8 @@ function filteredLeads() {
     if (re === "sim" && !l.reativado) return false;
     if (re === "nao" && l.reativado) return false;
     if (d === "__none" && l.responsavel) return false;
-    if (d && d !== "__none" && l.responsavel !== d) return false;
+    if (d === "__any" && !l.responsavel) return false;
+    if (d && d !== "__none" && d !== "__any" && l.responsavel !== d) return false;
     if (q) {
       const hay = norm(`${l.nome} ${l.email} ${l.telefone} ${l.telefone2}`);
       if (!hay.includes(q) && !(qd.length >= 4 && String(l.telefone).includes(qd))) return false;
